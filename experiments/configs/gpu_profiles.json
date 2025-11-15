@@ -1,0 +1,16 @@
+[
+  {
+    "device_id": 0,
+    "name": "NVIDIA GeForce RTX 3050 Laptop GPU",
+    "compute_capability": "8.6",
+    "total_memory_mb": 4096.0,
+    "memory_bandwidth_gbps": 479106.3433372868,
+    "cuda_cores": 131072,
+    "sm_count": 2048,
+    "clock_rate_mhz": 210,
+    "memory_clock_rate_mhz": 405,
+    "pcie_link_gen": 1,
+    "pcie_link_width": 8,
+    "compute_score": 961.0
+  }
+]
