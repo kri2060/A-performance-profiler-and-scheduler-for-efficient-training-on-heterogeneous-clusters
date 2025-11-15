@@ -205,3 +205,15 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Data directories (too large for git)
+data/
+*.tar.gz
+
+# Experiment logs (can be large)
+# experiments/*/logs/*.json
+
+# Model checkpoints
+*.pt
+*.pth
+*.ckpt

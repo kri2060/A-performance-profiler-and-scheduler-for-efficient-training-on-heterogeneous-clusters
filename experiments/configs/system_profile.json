@@ -1,0 +1,17 @@
+{
+  "hostname": "krish",
+  "platform": "Linux",
+  "cpu_model": "Unknown",
+  "cpu_cores_physical": 8,
+  "cpu_cores_logical": 16,
+  "cpu_frequency_mhz": 4787.082,
+  "ram_total_gb": 14.880352020263672,
+  "ram_available_gb": 8.087165832519531,
+  "network_interfaces": [
+    "lo",
+    "docker0",
+    "wlan0",
+    "enp3s0"
+  ],
+  "ip_address": "10.100.52.69"
+}

@@ -1,0 +1,112 @@
+# Multi-Node Distributed Training with Docker
+# This compose file is for SINGLE MACHINE with multiple GPUs
+# For multi-machine setup, use individual docker commands (see scripts/)
+
+version: '3.8'
+
+services:
+  # Master node with dashboard
+  master:
+    build: .
+    container_name: hetero-master
+    hostname: master
+    networks:
+      - hetero-net
+    ports:
+      - "8501:8501"    # Streamlit Dashboard
+      - "29500:29500"  # PyTorch DDP master port
+    volumes:
+      - ./:/workspace
+      - ./experiments:/workspace/experiments
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+      - MASTER_ADDR=master
+      - MASTER_PORT=29500
+      - RANK=0
+      - WORLD_SIZE=3
+    stdin_open: true
+    tty: true
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['0']
+              capabilities: [gpu]
+
+  # Worker nodes (for same machine only)
+  worker1:
+    build: .
+    container_name: hetero-worker1
+    hostname: worker1
+    networks:
+      - hetero-net
+    volumes:
+      - ./:/workspace
+      - ./experiments:/workspace/experiments
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+      - MASTER_ADDR=master
+      - MASTER_PORT=29500
+      - RANK=1
+      - WORLD_SIZE=3
+    depends_on:
+      - master
+    stdin_open: true
+    tty: true
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['1']
+              capabilities: [gpu]
+
+  worker2:
+    build: .
+    container_name: hetero-worker2
+    hostname: worker2
+    networks:
+      - hetero-net
+    volumes:
+      - ./:/workspace
+      - ./experiments:/workspace/experiments
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+      - MASTER_ADDR=master
+      - MASTER_PORT=29500
+      - RANK=2
+      - WORLD_SIZE=3
+    depends_on:
+      - master
+    stdin_open: true
+    tty: true
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['2']
+              capabilities: [gpu]
+
+  # Monitoring dashboard (runs separately)
+  dashboard:
+    build: .
+    container_name: hetero-dashboard
+    networks:
+      - hetero-net
+    ports:
+      - "8502:8501"  # Streamlit on different port
+    volumes:
+      - ./:/workspace
+      - ./experiments:/workspace/experiments
+    command: streamlit run src/monitoring/dashboard.py --server.port=8501 --server.address=0.0.0.0
+    stdin_open: true
+    tty: true
+
+networks:
+  hetero-net:
+    driver: bridge
