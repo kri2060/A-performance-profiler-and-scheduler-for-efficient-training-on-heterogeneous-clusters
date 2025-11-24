@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+
+{% block title %}Multi-Node Setup Documentation - Home{% endblock %}
+
+{% block content %}
+<h1>🎯 Welcome to Multi-Node Setup Documentation</h1>
+
+<p style="font-size: 1.1rem; color: #666; margin-bottom: 2rem;">
+    Complete guide for setting up distributed training across multiple worker machines with heterogeneous hardware.
+</p>
+
+<div style="background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+            padding: 2rem; border-radius: 12px; margin-bottom: 2rem;">
+    <h2 style="margin-top: 0;">🚀 Quick Navigation</h2>
+    <p><strong>New to multi-node training?</strong> Start here:</p>
+    <ol style="margin-left: 1.5rem;">
+        <li><a href="/doc/quick-start">⚡ Quick Start (5 Minutes)</a> - Fastest way to get started</li>
+        <li><a href="/doc/checklist">✅ Setup Checklist</a> - Verify prerequisites</li>
+        <li><a href="/doc/master">🎯 Master Setup</a> - Setup your main node</li>
+        <li><a href="/doc/worker">🔧 Worker Setup</a> - Setup worker machines</li>
+        <li><a href="/doc/launch">🚀 Launch Training</a> - Start distributed training</li>
+    </ol>
+</div>
+
+<h2>📚 All Guides</h2>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-top: 1.5rem;">
+    {% for doc_id, doc in docs.items() %}
+    <a href="/doc/{{ doc_id }}"
+       style="display: block; padding: 1.5rem; background: white;
+              border: 2px solid #e0e0e0; border-radius: 12px;
+              text-decoration: none; color: inherit;
+              transition: all 0.3s; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+        <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">{{ doc.icon }}</div>
+        <h3 style="color: #667eea; margin-top: 0; margin-bottom: 0.5rem;">{{ doc.title }}</h3>
+        <p style="color: #666; margin-bottom: 0; font-size: 0.95rem;">{{ doc.description }}</p>
+    </a>
+    {% endfor %}
+</div>
+
+<div style="background: #fff3cd; border-left: 4px solid #ffc107;
+            padding: 1.5rem; border-radius: 8px; margin-top: 3rem;">
+    <h3 style="margin-top: 0; color: #856404;">💡 Tip: Bookmark This Page</h3>
+    <p style="margin-bottom: 0; color: #856404;">
+        Keep this documentation server running while you set up your cluster.
+        Access it from any machine on your network at:
+        <code style="background: #fff; padding: 0.25rem 0.5rem; border-radius: 4px;">
+            http://YOUR_IP:5000
+        </code>
+    </p>
+</div>
+
+<h2 style="margin-top: 3rem;">🎓 What You'll Learn</h2>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; margin-top: 1rem;">
+    <div style="padding: 1rem; background: #f9f9f9; border-radius: 8px;">
+        <strong>✅ Prerequisites</strong>
+        <p style="font-size: 0.9rem; margin-top: 0.5rem; margin-bottom: 0;">
+            Docker, network setup, hardware requirements
+        </p>
+    </div>
+    <div style="padding: 1rem; background: #f9f9f9; border-radius: 8px;">
+        <strong>🎯 Master Setup</strong>
+        <p style="font-size: 0.9rem; margin-top: 0.5rem; margin-bottom: 0;">
+            Configure and launch the master node
+        </p>
+    </div>
+    <div style="padding: 1rem; background: #f9f9f9; border-radius: 8px;">
+        <strong>🔧 Worker Setup</strong>
+        <p style="font-size: 0.9rem; margin-top: 0.5rem; margin-bottom: 0;">
+            Setup workers on Linux, Windows, macOS
+        </p>
+    </div>
+    <div style="padding: 1rem; background: #f9f9f9; border-radius: 8px;">
+        <strong>🚀 Training</strong>
+        <p style="font-size: 0.9rem; margin-top: 0.5rem; margin-bottom: 0;">
+            Launch and monitor distributed training
+        </p>
+    </div>
+    <div style="padding: 1rem; background: #f9f9f9; border-radius: 8px;">
+        <strong>🐛 Troubleshooting</strong>
+        <p style="font-size: 0.9rem; margin-top: 0.5rem; margin-bottom: 0;">
+            Fix common issues and errors
+        </p>
+    </div>
+    <div style="padding: 1rem; background: #f9f9f9; border-radius: 8px;">
+        <strong>📊 Optimization</strong>
+        <p style="font-size: 0.9rem; margin-top: 0.5rem; margin-bottom: 0;">
+            Performance tuning and best practices
+        </p>
+    </div>
+</div>
+
+<h2 style="margin-top: 3rem;">🔥 Features</h2>
+
+<ul style="columns: 2; column-gap: 2rem;">
+    <li>✅ Heterogeneous hardware support (mixed GPUs/CPUs)</li>
+    <li>✅ Cross-platform (Linux, Windows, macOS)</li>
+    <li>✅ Automatic hardware detection</li>
+    <li>✅ Adaptive load balancing</li>
+    <li>✅ Docker-based deployment</li>
+    <li>✅ Real-time monitoring</li>
+    <li>✅ Fault tolerance</li>
+    <li>✅ Easy scaling</li>
+</ul>
+
+<div style="background: #d1ecf1; border-left: 4px solid #0c5460;
+            padding: 1.5rem; border-radius: 8px; margin-top: 2rem;">
+    <h3 style="margin-top: 0; color: #0c5460;">🎯 Ready to Start?</h3>
+    <p style="color: #0c5460; margin-bottom: 1rem;">
+        The fastest way to get your cluster running is the Quick Start guide.
+        It takes just 5-10 minutes for a 4-machine setup!
+    </p>
+    <a href="/doc/quick-start"
+       style="display: inline-block; padding: 0.75rem 1.5rem;
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              color: white; text-decoration: none; border-radius: 8px;
+              font-weight: 500; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+        🚀 Start Quick Setup
+    </a>
+</div>
+{% endblock %}
