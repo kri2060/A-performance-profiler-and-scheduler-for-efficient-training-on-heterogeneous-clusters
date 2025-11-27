@@ -72,20 +72,41 @@ class DistributedTrainer:
         # Adjust batch size for heterogeneous GPUs
         self.batch_size = self._get_adjusted_batch_size()
 
-        # Setup device
-        self.device = torch.device(f"cuda:{self.local_rank}")
-        torch.cuda.set_device(self.device)
+        # Setup device - handle both CUDA and CPU
+        # Gloo backend supports both CPU and GPU, NCCL requires GPU
+        if torch.cuda.is_available():
+            try:
+                self.device = torch.device(f"cuda:{self.local_rank}")
+                torch.cuda.set_device(self.device)
+                self.use_cuda = True
+                logger.info(f"Rank {self.rank}: Using CUDA device {self.local_rank}")
+            except Exception as e:
+                logger.warning(f"Rank {self.rank}: Failed to set CUDA device, falling back to CPU: {e}")
+                self.device = torch.device("cpu")
+                self.use_cuda = False
+                logger.info(f"Rank {self.rank}: Using CPU device")
+        else:
+            self.device = torch.device("cpu")
+            self.use_cuda = False
+            logger.info(f"Rank {self.rank}: Using CPU device")
 
         # Move model to device
         self.model = model.to(self.device)
 
         # Wrap model with DDP
-        self.model = DDP(
-            self.model,
-            device_ids=[self.local_rank],
-            output_device=self.local_rank,
-            find_unused_parameters=False
-        )
+        if self.use_cuda:
+            self.model = DDP(
+                self.model,
+                device_ids=[self.local_rank],
+                output_device=self.local_rank,
+                find_unused_parameters=False
+            )
+        else:
+            # CPU-only DDP (no device_ids)
+            self.model = DDP(
+                self.model,
+                find_unused_parameters=False
+            )
 
         # Setup criterion
         self.criterion = criterion if criterion else nn.CrossEntropyLoss()
