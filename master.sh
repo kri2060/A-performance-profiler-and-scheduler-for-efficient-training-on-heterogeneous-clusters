@@ -68,6 +68,7 @@ echo "=========================================="
 
 # Start training with lightweight synthetic dataset for demo
 # Use -u flag for unbuffered output to see logs immediately
+# Note: backend defaults to 'nccl' in main.py
 python -u -m src.training.main \
   --model simple_cnn \
   --dataset synthetic_image \
@@ -76,7 +77,6 @@ python -u -m src.training.main \
   --batch-size 32 \
   --epochs 5 \
   --lr 0.01 \
-  --backend nccl \
   --master-addr $MASTER_ADDR \
   --enable-profiling \
   --enable-load-balancing \
