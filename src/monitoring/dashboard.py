@@ -1,6 +1,6 @@
 """
-Streamlit Monitoring Dashboard
-Real-time visualization of training metrics
+Professional Monitoring Dashboard
+Real-time visualization of heterogeneous cluster training
 """
 
 import streamlit as st
@@ -15,12 +15,65 @@ import sys
 # Add parent directory to path
 sys.path.append(str(Path(__file__).parent.parent))
 
+# Professional styling
 st.set_page_config(
-    page_title="Hetero Cluster Monitor",
-    page_icon="🚀",
+    page_title="Heterogeneous Cluster Monitor",
+    page_icon="⚡",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
+
+# Custom CSS for professional look
+st.markdown("""
+<style>
+    .main {
+        padding: 2rem;
+    }
+    .stMetric {
+        background-color: #f8f9fa;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    h1 {
+        color: #1f2937;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+    }
+    h3 {
+        color: #4b5563;
+        font-weight: 500;
+        margin-top: 2rem;
+        margin-bottom: 1rem;
+    }
+    .status-badge {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        border-radius: 1rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+    }
+    .status-active {
+        background-color: #10b981;
+        color: white;
+    }
+    .status-inactive {
+        background-color: #ef4444;
+        color: white;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# Color scheme
+COLORS = {
+    'primary': '#3b82f6',
+    'secondary': '#8b5cf6',
+    'success': '#10b981',
+    'warning': '#f59e0b',
+    'danger': '#ef4444',
+    'dark': '#1f2937',
+    'light': '#f3f4f6'
+}
 
 
 def load_metrics(metrics_dir: str = "experiments/logs"):
@@ -61,13 +114,12 @@ def load_gpu_profiles(config_dir: str = "experiments/configs"):
 
 
 def plot_gpu_utilization(metrics_dict):
-    """Plot GPU utilization over time"""
-    fig = make_subplots(
-        rows=1, cols=1,
-        subplot_titles=("GPU Utilization",)
-    )
+    """Plot GPU utilization over time with professional styling"""
+    fig = go.Figure()
 
-    for rank, metrics in metrics_dict.items():
+    colors = [COLORS['primary'], COLORS['secondary'], COLORS['success'], COLORS['warning']]
+
+    for idx, (rank, metrics) in enumerate(metrics_dict.items()):
         if not metrics:
             continue
 
@@ -78,14 +130,24 @@ def plot_gpu_utilization(metrics_dict):
                 x=df['iteration'],
                 y=df['gpu_utilization'],
                 mode='lines',
-                name=f'Rank {rank}',
-                line=dict(width=2)
+                name=f'Worker {rank}',
+                line=dict(width=3, color=colors[idx % len(colors)]),
+                hovertemplate='<b>Worker %{fullData.name}</b><br>Iteration: %{x}<br>Utilization: %{y:.1f}%<extra></extra>'
             )
         )
 
-    fig.update_xaxes(title_text="Iteration")
-    fig.update_yaxes(title_text="GPU Utilization (%)", range=[0, 100])
-    fig.update_layout(height=400, hovermode='x unified')
+    fig.update_layout(
+        title=dict(text="GPU Utilization", font=dict(size=16, color=COLORS['dark'])),
+        xaxis=dict(title="Iteration", showgrid=True, gridcolor='#e5e7eb'),
+        yaxis=dict(title="Utilization (%)", range=[0, 100], showgrid=True, gridcolor='#e5e7eb'),
+        height=350,
+        hovermode='x unified',
+        plot_bgcolor='white',
+        paper_bgcolor='white',
+        font=dict(family="Inter, sans-serif"),
+        margin=dict(l=60, r=40, t=60, b=60),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
 
     return fig
 
@@ -151,13 +213,12 @@ def plot_throughput(metrics_dict):
 
 
 def plot_loss(metrics_dict):
-    """Plot training loss"""
-    fig = make_subplots(
-        rows=1, cols=1,
-        subplot_titles=("Training Loss",)
-    )
+    """Plot training loss with professional styling"""
+    fig = go.Figure()
 
-    for rank, metrics in metrics_dict.items():
+    colors = [COLORS['primary'], COLORS['secondary'], COLORS['success'], COLORS['warning']]
+
+    for idx, (rank, metrics) in enumerate(metrics_dict.items()):
         if not metrics:
             continue
 
@@ -168,14 +229,24 @@ def plot_loss(metrics_dict):
                 x=df['iteration'],
                 y=df['loss'],
                 mode='lines',
-                name=f'Rank {rank}',
-                line=dict(width=2)
+                name=f'Worker {rank}',
+                line=dict(width=3, color=colors[idx % len(colors)]),
+                hovertemplate='<b>Worker %{fullData.name}</b><br>Iteration: %{x}<br>Loss: %{y:.4f}<extra></extra>'
             )
         )
 
-    fig.update_xaxes(title_text="Iteration")
-    fig.update_yaxes(title_text="Loss")
-    fig.update_layout(height=400, hovermode='x unified')
+    fig.update_layout(
+        title=dict(text="Training Loss", font=dict(size=16, color=COLORS['dark'])),
+        xaxis=dict(title="Iteration", showgrid=True, gridcolor='#e5e7eb'),
+        yaxis=dict(title="Loss", showgrid=True, gridcolor='#e5e7eb'),
+        height=350,
+        hovermode='x unified',
+        plot_bgcolor='white',
+        paper_bgcolor='white',
+        font=dict(family="Inter, sans-serif"),
+        margin=dict(l=60, r=40, t=60, b=60),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
 
     return fig
 
@@ -300,135 +371,98 @@ def display_current_stats(metrics_dict):
 def main():
     """Main dashboard function"""
 
-    st.title("🚀 Heterogeneous Cluster Training Monitor")
-    st.markdown("Real-time monitoring of distributed training on heterogeneous GPUs")
-
-    # Sidebar
-    with st.sidebar:
-        st.header("Settings")
-
-        # Experiment selection
-        experiments_base = Path("experiments")
-        available_experiments = []
-        if experiments_base.exists():
-            available_experiments = [d.name for d in experiments_base.iterdir()
-                                   if d.is_dir() and (d / "logs").exists()]
-
-        if available_experiments:
-            experiment_name = st.selectbox(
-                "Select Experiment",
-                options=available_experiments,
-                index=0
-            )
-            metrics_dir = f"experiments/{experiment_name}/logs"
-            config_dir = f"experiments/{experiment_name}/configs"
-        else:
-            st.warning("No experiments found. Using manual paths.")
-            metrics_dir = st.text_input(
-                "Metrics Directory",
-                value="experiments/logs"
-            )
-            config_dir = st.text_input(
-                "Config Directory",
-                value="experiments/configs"
-            )
-
-        refresh_interval = st.slider(
-            "Refresh Interval (s)",
-            min_value=1,
-            max_value=30,
-            value=5
-        )
-
-        auto_refresh = st.checkbox("Auto Refresh", value=True)
-
-        if st.button("Refresh Now"):
+    # Header
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.title("⚡ Heterogeneous Cluster Monitor")
+        st.caption("Real-time distributed training visualization")
+    with col2:
+        auto_refresh = st.checkbox("Auto-refresh", value=True)
+        if st.button("🔄 Refresh", use_container_width=True):
             st.rerun()
+
+    st.markdown("---")
+
+    # Experiment selection (compact)
+    experiments_base = Path("experiments")
+    available_experiments = []
+    if experiments_base.exists():
+        available_experiments = [d.name for d in experiments_base.iterdir()
+                               if d.is_dir() and (d / "logs").exists()]
+
+    if available_experiments:
+        experiment_name = st.selectbox(
+            "📁 Experiment",
+            options=available_experiments,
+            index=len(available_experiments) - 1,  # Latest experiment
+            label_visibility="collapsed"
+        )
+        metrics_dir = f"experiments/{experiment_name}/logs"
+        config_dir = f"experiments/{experiment_name}/configs"
+    else:
+        st.warning("⚠️ No experiments found. Start training to see metrics.")
+        metrics_dir = "experiments/logs"
+        config_dir = "experiments/configs"
 
     # Load data
     metrics_dict = load_metrics(metrics_dir)
     gpu_profiles = load_gpu_profiles(config_dir)
 
     if not metrics_dict:
-        st.warning("No metrics found. Start training to see data.")
-        st.info(f"Looking for metrics in: {metrics_dir}")
+        st.info("📊 Waiting for training data...")
+        st.caption(f"Looking in: `{metrics_dir}`")
         return
 
-    # Display current stats
-    st.subheader("Current Statistics")
-    display_current_stats(metrics_dict)
+    # === CLUSTER STATUS ===
+    st.subheader("🖥️ Cluster Status")
+    status_cols = st.columns(len(metrics_dict) if metrics_dict else 1)
 
-    st.markdown("---")
+    for idx, (rank, metrics) in enumerate(metrics_dict.items()):
+        with status_cols[idx]:
+            latest = metrics[-1] if metrics else {}
+            gpu_util = latest.get('gpu_utilization', 0)
 
-    # GPU Comparison
-    if gpu_profiles:
-        st.subheader("GPU Hardware Comparison")
-        fig = plot_gpu_comparison(gpu_profiles)
-        st.plotly_chart(fig, use_container_width=True)
+            # Status indicator
+            status_color = COLORS['success'] if gpu_util > 10 else COLORS['danger']
+            st.markdown(f'<span class="status-badge" style="background-color: {status_color};">Worker {rank}</span>',
+                       unsafe_allow_html=True)
 
-        # Display GPU details
-        with st.expander("GPU Details"):
-            for gpu in gpu_profiles:
-                st.write(f"**GPU {gpu['device_id']}: {gpu['name']}**")
-                st.write(f"  - Compute Score: {gpu['compute_score']}")
-                st.write(f"  - Memory: {gpu['total_memory_mb']:.0f} MB")
-                st.write(f"  - Compute Capability: {gpu['compute_capability']}")
+            # Key metrics
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("GPU", f"{gpu_util:.0f}%", delta=None)
+                st.metric("Memory", f"{latest.get('gpu_memory_percent', 0):.0f}%")
+            with col2:
+                st.metric("Throughput", f"{latest.get('throughput', 0):.0f}")
+                st.metric("Loss", f"{latest.get('loss', 0):.3f}")
 
-    st.markdown("---")
+    st.markdown("<br>", unsafe_allow_html=True)
 
-    # Training metrics
-    st.subheader("Training Metrics")
-
+    # === TRAINING METRICS ===
+    st.subheader("📈 Training Metrics")
     col1, col2 = st.columns(2)
 
     with col1:
         st.plotly_chart(plot_loss(metrics_dict), use_container_width=True)
-
     with col2:
         st.plotly_chart(plot_throughput(metrics_dict), use_container_width=True)
 
-    st.markdown("---")
-
-    # GPU metrics
-    st.subheader("GPU Metrics")
-
+    # === GPU METRICS ===
+    st.subheader("⚙️ GPU Performance")
     col1, col2 = st.columns(2)
 
     with col1:
         st.plotly_chart(plot_gpu_utilization(metrics_dict), use_container_width=True)
-
     with col2:
         st.plotly_chart(plot_memory_usage(metrics_dict), use_container_width=True)
 
-    st.markdown("---")
-
-    # Performance analysis
-    st.subheader("Performance Analysis")
+    # === PERFORMANCE BREAKDOWN ===
+    st.subheader("🔍 Performance Breakdown")
     st.plotly_chart(plot_iteration_time_breakdown(metrics_dict), use_container_width=True)
-
-    # Bottleneck detection
-    with st.expander("Bottleneck Analysis"):
-        for rank, metrics in metrics_dict.items():
-            if not metrics:
-                continue
-
-            df = pd.DataFrame(metrics)
-            recent = df.tail(20)
-
-            avg_times = {
-                'Data Loading': recent['data_loading_time'].mean(),
-                'Forward Pass': recent['forward_time'].mean(),
-                'Backward Pass': recent['backward_time'].mean(),
-                'Optimizer': recent['optimizer_time'].mean(),
-            }
-
-            bottleneck = max(avg_times.items(), key=lambda x: x[1])
-
-            st.write(f"**Rank {rank} Bottleneck:** {bottleneck[0]} ({bottleneck[1]:.3f}s)")
 
     # Auto-refresh
     if auto_refresh:
-        time.sleep(refresh_interval)
+        time.sleep(5)
         st.rerun()
 
 
