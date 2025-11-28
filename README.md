@@ -12,6 +12,27 @@ A toolkit to profile, monitor, and adaptively balance distributed deep-learning 
 
 ---
 
+## Quick Start
+
+### Linux (Ubuntu/Debian)
+
+**Automated Setup:**
+```bash
+./setup_linux.sh
+```
+
+**Quick Start Guide:** See [QUICKSTART_LINUX.md](QUICKSTART_LINUX.md)
+
+**Detailed Setup:** See [LINUX_SETUP.md](LINUX_SETUP.md)
+
+### Platform Support
+
+- **Linux**: Full support (CPU and GPU)
+- **Windows**: WSL2 support (legacy scripts available)
+- **macOS**: CPU-only support
+
+---
+
 ## Key Features
 
 * Hardware discovery (GPU/CPU/Network/Storage)
