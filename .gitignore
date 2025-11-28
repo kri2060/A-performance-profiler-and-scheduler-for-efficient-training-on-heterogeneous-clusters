@@ -217,3 +217,4 @@ data/
 *.pt
 *.pth
 *.ckpt
+node_modules/
