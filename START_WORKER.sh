@@ -50,6 +50,9 @@ if ip link show wlan0 &>/dev/null; then
 elif ip link show wlp &>/dev/null; then
     # Some Linux systems use wlp* naming
     NETWORK_INTERFACE=$(ip link show | grep -o "wlp[^:]*" | head -n1)
+elif ip link show wlx &>/dev/null; then
+    # USB WiFi adapters use wlx* naming
+    NETWORK_INTERFACE=$(ip link show | grep -o "wlx[^:]*" | head -n1)
 elif ip link show eth0 &>/dev/null; then
     NETWORK_INTERFACE="eth0"
 elif ip link show enp &>/dev/null; then
@@ -88,7 +91,8 @@ echo "Network Interface: $NETWORK_INTERFACE"
 echo "Connecting to master at: $MASTER_ADDR:$MASTER_PORT"
 echo "=========================================="
 
-python -m src.training.main \
+# Use -u flag for unbuffered output to see logs immediately
+python -u -m src.training.main \
   --model simple_cnn \
   --dataset synthetic_image \
   --num-samples 1000 \
@@ -96,9 +100,9 @@ python -m src.training.main \
   --batch-size 32 \
   --epochs 5 \
   --lr 0.01 \
-  --backend gloo \
+  --backend nccl \
   --master-addr $MASTER_ADDR \
   --enable-profiling \
   --enable-load-balancing \
   --load-balance-policy dynamic \
-  --experiment-name demo_gloo_heterogeneous
+  --experiment-name demo_nccl_heterogeneous

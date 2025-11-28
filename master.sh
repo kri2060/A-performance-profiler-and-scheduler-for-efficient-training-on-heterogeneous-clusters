@@ -67,7 +67,8 @@ echo "Waiting for $((WORLD_SIZE - 1)) workers to connect..."
 echo "=========================================="
 
 # Start training with lightweight synthetic dataset for demo
-python -m src.training.main \
+# Use -u flag for unbuffered output to see logs immediately
+python -u -m src.training.main \
   --model simple_cnn \
   --dataset synthetic_image \
   --num-samples 1000 \
@@ -75,9 +76,9 @@ python -m src.training.main \
   --batch-size 32 \
   --epochs 5 \
   --lr 0.01 \
-  --backend gloo \
+  --backend nccl \
   --master-addr $MASTER_ADDR \
   --enable-profiling \
   --enable-load-balancing \
   --load-balance-policy dynamic \
-  --experiment-name demo_gloo_heterogeneous
+  --experiment-name demo_nccl_heterogeneous
