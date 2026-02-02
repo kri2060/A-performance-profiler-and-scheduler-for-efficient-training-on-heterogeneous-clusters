@@ -465,6 +465,42 @@ class AdaptiveLoadBalancer:
 
         logger.info(f"Loaded load balancer state from {filepath}")
 
+    def score_placement(self, nodes: List[Dict], model_requirements: Dict) -> List[Dict]:
+        """
+        Score and filter nodes for initial placement (Phase 1)
+        
+        Args:
+            nodes: List of available nodes (dicts from nodes.yaml)
+            model_requirements: Dict with 'min_memory_mb', 'min_compute_score'
+            
+        Returns:
+            List of nodes sorted by suitability score (descending)
+        """
+        scored_nodes = []
+        min_mem = model_requirements.get('min_memory_mb', 0)
+        
+        for node in nodes:
+            # Check hard constraints
+            node_mem = node.get('total_memory_mb', 0)
+            if node_mem < min_mem:
+                continue
+                
+            # Calculate score (simple weighted sum of compute and memory)
+            compute_score = node.get('compute_score', 0)
+            
+            # Score = Compute * 1.0 + (Memory / 1024) * 0.1
+            # We prioritize compute speed for training
+            score = compute_score + (node_mem / 1024.0) * 0.1
+            
+            # Add score to node dict copy
+            node_with_score = node.copy()
+            node_with_score['placement_score'] = score
+            scored_nodes.append(node_with_score)
+            
+        # Sort by score desc
+        scored_nodes.sort(key=lambda x: x['placement_score'], reverse=True)
+        return scored_nodes
+
 
 def test_load_balancer():
     """Test load balancer with sample GPU profiles"""

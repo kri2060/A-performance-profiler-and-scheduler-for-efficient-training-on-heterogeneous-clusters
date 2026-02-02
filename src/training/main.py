@@ -20,6 +20,8 @@ from training.models import get_model
 from utils.datasets import get_dataset
 from profiling.performance_profiler import PerformanceProfiler
 from scheduling.load_balancer import AdaptiveLoadBalancer
+from monitoring.redis_metrics import RedisMetricsWriter
+from scheduling.health_monitor import NodeHealthManager
 
 logging.basicConfig(
     level=logging.INFO,
@@ -164,8 +166,26 @@ def train_worker(rank, args):
 
                 logger.info(f"Rank {rank}: Adjusted batch size = {my_batch_size}")
         else:
+                logger.info(f"Rank {rank}: Adjusted batch size = {my_batch_size}")
+        else:
             logger.warning(f"GPU profiles not found, using equal batch sizes")
 
+    # PHASE 1: Resource-Aware Placement
+    # Filter nodes based on placement score if profiles are available
+    if load_balancer and args.world_size and rank == 0:
+        model_requirements = {'min_memory_mb': 2048, 'min_compute_score': 1.0} # Example defaults
+        scored_nodes = load_balancer.score_placement(load_balancer.nodes, model_requirements)
+        
+        # If we have more nodes than needed, pick top N
+        if len(scored_nodes) > world_size:
+            selected_nodes = scored_nodes[:world_size]
+            logger.info(f"Resource-Aware Placement: Selected Top {world_size} nodes")
+            for n in selected_nodes:
+                logger.info(f"  - Node {n['device_id']}: Score={n['placement_score']:.2f}, Mem={n['total_memory_mb']}MB")
+            
+            # Note: In a real scheduler, we would launch processes only on these nodes.
+            # Here we just log the decision since processes are likely already started manually.
+    
     # Create model
     model = get_model(args.model, num_classes=args.num_classes, pretrained=False)
 
@@ -186,6 +206,35 @@ def train_worker(rank, args):
             rank=rank,
             window_size=100
         )
+
+    # Initialize Redis Metrics Writer
+    redis_writer = None
+    if args.enable_profiling:
+        redis_host = os.environ.get('REDIS_HOST', 'localhost')
+        redis_port = int(os.environ.get('REDIS_PORT', 6379))
+        try:
+            redis_writer = RedisMetricsWriter(
+                redis_host=redis_host,
+                redis_port=redis_port
+            )
+            logger.info(f"Initialized Redis Metrics Writer at {redis_host}:{redis_port}")
+        except Exception as e:
+            logger.warning(f"Failed to initialize Redis writer: {e}")
+
+        except Exception as e:
+            logger.warning(f"Failed to initialize Redis writer: {e}")
+
+
+    # PHASE 2: Fault Tolerance - Start Heartbeat
+    health_manager = None
+    if args.enable_load_balancing: # Assuming we want this with LB features, or always?
+        # Using environment vars for Redis
+        redis_host = os.environ.get('REDIS_HOST', 'localhost')
+        redis_port = int(os.environ.get('REDIS_PORT', 6379))
+        
+        health_manager = NodeHealthManager(redis_host=redis_host, redis_port=redis_port)
+        health_manager.start_heartbeat(rank)
+        logger.info(f"Fault Tolerance: Started heartbeat for Rank {rank}")
 
     # Create trainer
     trainer = DistributedTrainer(
@@ -274,18 +323,72 @@ def train_worker(rank, args):
                         'gpu_memory_percent': metrics.gpu_memory_percent,
                     })
 
+                    # Write to Redis if enabled
+                    if redis_writer:
+                        try:
+                            redis_writer.write_training_metrics(
+                                rank=rank,
+                                epoch=epoch,
+                                iteration=batch_idx,
+                                loss=loss.item(),
+                                iteration_time=metrics.iteration_time,
+                                throughput=metrics.throughput
+                            )
+                            # Also write GPU metrics if available
+                            redis_writer.write_gpu_metrics(
+                                gpu_id=rank, # Assuming rank maps to GPU ID locally
+                                utilization=metrics.gpu_utilization,
+                                memory_used=metrics.gpu_memory_used if hasattr(metrics, 'gpu_memory_used') else 0,
+                                memory_total=metrics.gpu_memory_total if hasattr(metrics, 'gpu_memory_total') else 0,
+                                temperature=metrics.gpu_temperature if hasattr(metrics, 'gpu_temperature') else 0,
+                                power_draw=metrics.gpu_power_draw if hasattr(metrics, 'gpu_power_draw') else 0,
+                                power_limit=metrics.gpu_power_limit if hasattr(metrics, 'gpu_power_limit') else 0
+                            )
+                        except Exception as e:
+                            logger.error(f"Failed to write to Redis: {e}")
+
+
             # Update load balancer
             if load_balancer and batch_idx % args.rebalance_interval == 0:
                 avg_metrics = profiler.get_average_metrics(n=10) if profiler else {}
-
-                load_balancer.update_node_stats(rank, {
-                    'utilization': avg_metrics.get('gpu_utilization', 0),
-                    'memory_percent': avg_metrics.get('gpu_memory_percent', 0),
-                    'iteration_time': avg_metrics.get('iteration_time', 0),
-                })
-
-                if rank == 0 and load_balancer.should_rebalance():
+                
+                # Prepare local stats tensor: [util, mem, time]
+                local_stats = torch.tensor([
+                    avg_metrics.get('gpu_utilization', 0.0),
+                    avg_metrics.get('gpu_memory_percent', 0.0),
+                    avg_metrics.get('iteration_time', 0.0)
+                ], device=trainer.device)
+                
+                # Gather all stats to Rank 0
+                if world_size > 1:
+                    gathered_stats = [torch.zeros_like(local_stats) for _ in range(world_size)]
+                    dist.all_gather(gathered_stats, local_stats)
+                else:
+                    gathered_stats = [local_stats]
+                
+                # Rank 0 processes stats and checks for stragglers
+                if rank == 0:
+                    for r, stats in enumerate(gathered_stats):
+                        load_balancer.update_node_stats(r, {
+                            'utilization': stats[0].item(),
+                            'memory_percent': stats[1].item(),
+                            'iteration_time': stats[2].item(),
+                        })
+                    
+                    load_balancer.detect_stragglers()
                     load_balancer.print_status()
+                    
+                    # PHASE 3: Performance Preemption
+                    # If any node is a straggler, trigger Elastic Restart
+                    stragglers = [n.rank for n in load_balancer.nodes if n.is_straggler]
+                    if stragglers:
+                        logger.error(f"PERFORMANCE ALERT: Stragglers detected: {stragglers}")
+                        logger.error("Initiating Performance-Based Reconfiguration (Preemption)...")
+                        
+                        ckpt_path = output_dir / "checkpoints" / f"preempt_epoch_{epoch}_batch_{batch_idx}.pth"
+                        trainer.save_checkpoint(str(ckpt_path))
+                        
+                        raise RuntimeError(f"Performance Degradation: Stragglers {stragglers} detected. Checkpoint saved for elastic restart.")
 
             # Log
             if batch_idx % 10 == 0:
@@ -293,6 +396,36 @@ def train_worker(rank, args):
                     f"Rank {rank} | Epoch {epoch} | Batch {batch_idx}/{len(trainer.train_loader)} | "
                     f"Loss: {loss.item():.4f}"
                 )
+
+                # Save metrics periodically for real-time file-based monitoring
+                if metrics_history:
+                    metrics_file = logs_dir / f"rank_{rank}_metrics.json"
+                    try:
+                        with open(metrics_file, 'w') as f:
+                            json.dump(metrics_history, f, indent=2)
+                    except Exception as e:
+                        logger.warning(f"Failed to save periodic metrics: {e}")
+
+                    except Exception as e:
+                        logger.warning(f"Failed to save periodic metrics: {e}")
+
+            # PHASE 2: Fault Tolerance - Check Health (Master only)
+            if health_manager and rank == 0 and batch_idx % 20 == 0:
+                # Expect ranks 0 to world_size-1
+                expected = list(range(world_size))
+                dead_nodes = health_manager.check_cluster_health(expected)
+                if dead_nodes:
+                    logger.error(f"CRITICAL: Detected DEAD nodes: {dead_nodes}")
+                    logger.error("Initiating Emergency Checkpoint & Stop...")
+                    
+                    # Save checkpoint immediately
+                    ckpt_path = output_dir / "checkpoints" / f"emergency_epoch_{epoch}_batch_{batch_idx}.pth"
+                    trainer.save_checkpoint(str(ckpt_path))
+                    
+                    # By "Stop" we mean raising an error to terminate this main process
+                    # In a real system, the Orchestrator would restart us.
+                    # Current "Student-Safe" elasticity = Save & Crash gracefully.
+                    raise RuntimeError(f"Cluster Unhealthy: Nodes {dead_nodes} died. Checkpoint saved.")
 
     # Save metrics
     if profiler and rank == 0:
@@ -335,6 +468,7 @@ def main():
     logger.info(f"Epochs: {args.epochs}")
     logger.info(f"Load Balancing: {args.enable_load_balancing}")
     logger.info(f"Profiling: {args.enable_profiling}")
+    logger.info(f"Redis Host: {os.environ.get('REDIS_HOST', 'localhost')}")
     logger.info("="*80)
 
     # Get rank

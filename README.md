@@ -55,7 +55,9 @@ A toolkit to profile, monitor, and adaptively balance distributed deep-learning 
 * Ray (recommended)
 * torch.distributed (NCCL/Gloo)
 * Horovod (optional)
-* Docker, Kubernetes (optional)
+* Ray (recommended)
+* torch.distributed (NCCL/Gloo)
+* Horovod (optional)
 
 **Profiling & Monitoring**
 
@@ -105,16 +107,16 @@ A toolkit to profile, monitor, and adaptively balance distributed deep-learning 
 
 ```mermaid
 flowchart TD
-  A[Master / Coordinator] -->|sends tasks| B[Worker Node 1]
-  A -->|sends tasks| C[Worker Node 2]
-  A -->|sends tasks| D[Worker Node N]
-  B -->|metrics| M[Metrics Ingest]
-  C -->|metrics| M
-  D -->|metrics| M
-  M -->|store| DB[(InfluxDB / Postgres)]
-  M -->|stream| Dashboard[Grafana / Streamlit]
-  A -->|adjust workload| Balancer[Adaptive Load Balancer]
-  Balancer -->|policies| B
+  A["Master / Coordinator"] -->|"sends tasks"| B["Worker Node 1"]
+  A -->|"sends tasks"| C["Worker Node 2"]
+  A -->|"sends tasks"| D["Worker Node N"]
+  B -->|"metrics"| M["Metrics Ingest"]
+  C -->|"metrics"| M
+  D -->|"metrics"| M
+  M -->|"store"| DB[("InfluxDB / Postgres")]
+  M -->|"stream"| Dashboard["Grafana / Streamlit"]
+  A -->|"adjust workload"| Balancer["Adaptive Load Balancer"]
+  Balancer -->|"policies"| B
   Balancer --> C
   Balancer --> D
 ```
@@ -146,17 +148,17 @@ sequenceDiagram
 
 ```mermaid
 graph LR
-  subgraph ControlPlane
-    A[Coordinator Service]
-    B[Balancer Service]
-    C[Metrics Ingest]
-    D[API / Dashboard]
+  subgraph ControlPlane ["Control Plane"]
+    A["Coordinator Service"]
+    B["Balancer Service"]
+    C["Metrics Ingest"]
+    D["API / Dashboard"]
   end
 
-  subgraph WorkerPool
-    W1[Worker: GPU A100]
-    W2[Worker: GPU V100]
-    W3[Worker: GPU T4]
+  subgraph WorkerPool ["Worker Pool"]
+    W1["Worker: GPU A100"]
+    W2["Worker: GPU V100"]
+    W3["Worker: GPU T4"]
   end
 
   A --> W1
@@ -165,7 +167,7 @@ graph LR
   W1 --> C
   W2 --> C
   W3 --> C
-  C --> DB[(InfluxDB)]
+  C --> DB[("InfluxDB")]
   D --> DB
   B --> A
 ```
@@ -187,8 +189,9 @@ graph LR
 
 * Use environment variables for cluster config (RANK, WORLD_SIZE, MASTER_ADDR, MASTER_PORT).
 * Provide a `nodes.yaml` that lists node capabilities for initial bootstrapping.
-* Docker images: `profiler`, `worker`, `coordinator`, `dashboard`.
-* Kubernetes: provide `Deployment` + `DaemonSet` for worker nodes and `StatefulSet` for metrics DB.
+* Use environment variables for cluster config (RANK, WORLD_SIZE, MASTER_ADDR, MASTER_PORT).
+* Provide a `nodes.yaml` that lists node capabilities for initial bootstrapping.
+* Use `setup_linux.sh` to install dependencies on each node.
 
 ---
 
