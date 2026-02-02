@@ -92,21 +92,64 @@ services:
               device_ids: ['2']
               capabilities: [gpu]
 
-  # Monitoring dashboard (runs separately)
-  dashboard:
-    build: .
-    container_name: hetero-dashboard
+  # Redis for metrics storage
+  redis:
+    image: redis:7-alpine
+    container_name: hetero-redis
+    hostname: redis
     networks:
       - hetero-net
     ports:
-      - "8502:8501"  # Streamlit on different port
+      - "6379:6379"
     volumes:
-      - ./:/workspace
-      - ./experiments:/workspace/experiments
-    command: streamlit run src/monitoring/dashboard.py --server.port=8501 --server.address=0.0.0.0
-    stdin_open: true
-    tty: true
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+
+  # Grafana for visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: hetero-grafana
+    hostname: grafana
+    networks:
+      - hetero-net
+    ports:
+      - "3000:3000"  # Grafana UI
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_INSTALL_PLUGINS=redis-datasource
+      - GF_USERS_ALLOW_SIGN_UP=false
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  # Redis exporter for Grafana (exposes Redis metrics)
+  redis-exporter:
+    build:
+      context: .
+      dockerfile: Dockerfile.redis-exporter
+    container_name: hetero-redis-exporter
+    hostname: redis-exporter
+    networks:
+      - hetero-net
+    ports:
+      - "9121:9121"  # Prometheus-compatible metrics endpoint
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - redis
+    restart: unless-stopped
 
 networks:
   hetero-net:
     driver: bridge
+
+volumes:
+  redis-data:
+  grafana-data:

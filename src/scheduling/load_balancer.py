@@ -22,6 +22,7 @@ class NodeCapability:
     compute_score: float
     memory_mb: float
     bandwidth_gbps: float
+    network_mbps: float = 1000.0  # Default to 1Gbps
     current_utilization: float = 0.0
     current_memory_percent: float = 0.0
     avg_iteration_time: float = 0.0
@@ -38,6 +39,16 @@ class LoadBalancingPolicy:
     ) -> Dict[int, int]:
         """Calculate batch size for each node"""
         raise NotImplementedError
+
+    def calculate_communication_policy(
+        self,
+        nodes: List[NodeCapability]
+    ) -> Tuple[str, int]:
+        """
+        Calculate communication policy (compression, accumulation)
+        Returns: (compression_type, accumulation_steps)
+        """
+        return 'none', 1
 
 
 class ProportionalPolicy(LoadBalancingPolicy):
@@ -227,6 +238,7 @@ class AdaptiveLoadBalancer:
                 compute_score=profile.get('compute_score', 1.0),
                 memory_mb=profile.get('total_memory_mb', 0),
                 bandwidth_gbps=profile.get('memory_bandwidth_gbps', 0),
+                network_mbps=profile.get('network_mbps', 1000.0),
             )
             self.nodes.append(node)
 
@@ -314,6 +326,39 @@ class AdaptiveLoadBalancer:
         self.batch_sizes = batch_sizes
 
         return batch_sizes
+
+    def calculate_communication_config(self) -> Tuple[str, int]:
+        """
+        Calculate optimal communication configuration
+        
+        Returns:
+            (compression_type, accumulation_steps)
+        """
+        if not self.nodes:
+            return 'none', 1
+            
+        # Analyze network bottleneck
+        # We assume network_mbps is available (simulated or profiled)
+        min_network = min(node.network_mbps for node in self.nodes)
+        
+        compression = 'none'
+        accumulation = 1
+        
+        # Simple heuristic policy
+        if min_network < 100:  # Very slow (< 100 Mbps)
+            compression = 'fp16'
+            accumulation = 4
+        elif min_network < 1000:  # Slow (< 1 Gbps)
+            compression = 'fp16'
+            accumulation = 2
+        
+        # If we have stragglers, increase accumulation to reduce sync frequency
+        stragglers = [n for n in self.nodes if n.is_straggler]
+        if len(stragglers) > len(self.nodes) * 0.3:  # >30% stragglers
+            accumulation = max(accumulation, 2)
+            
+        logger.info(f"Communication Config: Compression={compression}, Accumulation={accumulation} (Min Net={min_network} Mbps)")
+        return compression, accumulation
 
     def should_rebalance(self) -> bool:
         """Check if rebalancing should occur"""

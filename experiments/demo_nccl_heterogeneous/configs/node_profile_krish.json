@@ -1,0 +1,39 @@
+{
+  "hostname": "krish",
+  "ip_address": "10.161.199.68",
+  "system": {
+    "hostname": "krish",
+    "platform": "Linux",
+    "cpu_model": "Unknown",
+    "cpu_cores_physical": 8,
+    "cpu_cores_logical": 16,
+    "cpu_frequency_mhz": 4787.082,
+    "ram_total_gb": 14.880359649658203,
+    "ram_available_gb": 8.391746520996094,
+    "network_interfaces": [
+      "lo",
+      "virbr0",
+      "br-1d65055030f2",
+      "docker0",
+      "wlan0",
+      "enp3s0"
+    ],
+    "ip_address": "10.161.199.68"
+  },
+  "gpus": [
+    {
+      "device_id": 0,
+      "name": "NVIDIA GeForce RTX 3050 Laptop GPU",
+      "compute_capability": "8.6",
+      "total_memory_mb": 4096.0,
+      "memory_bandwidth_gbps": 634309.8066719009,
+      "cuda_cores": 131072,
+      "sm_count": 2048,
+      "clock_rate_mhz": 210,
+      "memory_clock_rate_mhz": 405,
+      "pcie_link_gen": 1,
+      "pcie_link_width": 8,
+      "compute_score": 1271.4
+    }
+  ]
+}

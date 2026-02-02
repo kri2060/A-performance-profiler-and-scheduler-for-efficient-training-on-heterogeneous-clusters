@@ -13,6 +13,7 @@ from typing import Optional, Dict, Any, Callable
 import logging
 import time
 import json
+from src.communication.compression import GradientCompressor, FP16Compressor
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -39,6 +40,9 @@ class DistributedTrainer:
         device_id: Optional[int] = None,
         heterogeneous_batch: bool = True,
         batch_size_multiplier: float = 1.0,
+        accumulation_steps: int = 1,
+        use_compression: bool = False,
+        compression_type: str = 'fp16',
     ):
         """
         Initialize distributed trainer
@@ -65,6 +69,9 @@ class DistributedTrainer:
         self.backend = backend
         self.heterogeneous_batch = heterogeneous_batch
         self.batch_size_multiplier = batch_size_multiplier
+        self.accumulation_steps = accumulation_steps
+        self.use_compression = use_compression
+        self.compression_type = compression_type
 
         # Setup distributed environment
         self._setup_distributed(master_addr, master_port, backend, device_id)
@@ -107,6 +114,10 @@ class DistributedTrainer:
                 self.model,
                 find_unused_parameters=False
             )
+
+        # Register communication hook for compression
+        if self.use_compression and dist.is_initialized():
+            self._register_comm_hook()
 
         # Setup criterion
         self.criterion = criterion if criterion else nn.CrossEntropyLoss()
@@ -171,6 +182,16 @@ class DistributedTrainer:
                 )
                 self.backend = 'gloo'
 
+    def _register_comm_hook(self):
+        """Register DDP communication hook"""
+        if self.compression_type == 'fp16':
+            hook = GradientCompressor.get_comm_hook('fp16')
+            self.model.register_comm_hook(state=None, hook=hook)
+            logger.info(f"Rank {self.rank}: Registered FP16 communication hook")
+        elif self.compression_type == 'none':
+            # No hook (default) or identify hook
+            pass
+
     def _get_adjusted_batch_size(self) -> int:
         """Calculate adjusted batch size for heterogeneous GPUs"""
         if not self.heterogeneous_batch:
@@ -224,17 +245,46 @@ class DistributedTrainer:
             data, target = data.to(self.device), target.to(self.device)
 
             # Forward pass
-            self.optimizer.zero_grad()
-            output = self.model(data)
-            loss = self.criterion(output, target)
+        # Zero gradients at start of epoch
+        self.optimizer.zero_grad()
 
-            # Backward pass
-            loss.backward()
-            self.optimizer.step()
+        for batch_idx, (data, target) in enumerate(self.train_loader):
+            batch_start = time.time()
+
+            # Move to device
+            data, target = data.to(self.device), target.to(self.device)
+
+            # Determine if we should sync gradients
+            is_sync_step = ((batch_idx + 1) % self.accumulation_steps == 0) or ((batch_idx + 1) == len(self.train_loader))
+
+            # Forward + Backward context
+            # If not syncing, use no_sync() to prevent all_reduce
+            context = self.model.no_sync() if not is_sync_step else torch.enable_grad()  # enable_grad is dummy context
+            
+            # Only use no_sync if NOT syncing
+            if not is_sync_step:
+                context = self.model.no_sync()
+            else:
+                context = torch.enable_grad() # Dummy context
+
+            with context:
+                output = self.model(data)
+                loss = self.criterion(output, target)
+                
+                # Scale loss for gradient accumulation
+                loss = loss / self.accumulation_steps
+                loss.backward()
+
+            # Step optimizer only on sync steps
+            if is_sync_step:
+                self.optimizer.step()
+                self.optimizer.zero_grad()
 
             # Update metrics
+            # Note: loss.item() is scaled, so we multiply back for logging
             batch_size = data.size(0)
-            total_loss += loss.item() * batch_size
+            current_loss = loss.item() * self.accumulation_steps
+            total_loss += current_loss * batch_size
             total_samples += batch_size
             self.global_step += 1
 
@@ -244,7 +294,7 @@ class DistributedTrainer:
                 logger.info(
                     f"Rank {self.rank} | Epoch {self.current_epoch} | "
                     f"Batch {batch_idx}/{len(self.train_loader)} | "
-                    f"Loss: {loss.item():.4f} | "
+                    f"Loss: {current_loss:.4f} | "
                     f"Time: {batch_time:.3f}s"
                 )
 
@@ -385,6 +435,33 @@ class DistributedTrainer:
         if dist.is_initialized():
             dist.destroy_process_group()
         logger.info(f"Rank {self.rank}: Cleanup complete")
+
+    def update_communication_config(self, compression_type: str, accumulation_steps: int):
+        """
+        Update communication configuration dynamically
+        """
+        changed = False
+        
+        # Update accumulation steps
+        if self.accumulation_steps != accumulation_steps:
+            logger.info(f"Rank {self.rank}: Updating accumulation_steps from {self.accumulation_steps} to {accumulation_steps}")
+            self.accumulation_steps = accumulation_steps
+            changed = True
+            
+        # Update connection hook if compression type changed
+        if self.compression_type != compression_type:
+            logger.info(f"Rank {self.rank}: Updating compression_type from {self.compression_type} to {compression_type}")
+            self.compression_type = compression_type
+            
+            # Since hooks are registered on the model, we can try to re-register or clear
+            # In PyTorch DDP, register_comm_hook replaces the previous one.
+            # But we only do this if dist is initialized
+            if dist.is_initialized():
+                self._register_comm_hook()
+            changed = True
+            
+        return changed
+
 
 
 def setup_distributed_training(

@@ -304,6 +304,20 @@ def train_worker(rank, args):
             json.dump(metrics_history, f, indent=2)
         logger.info(f"Saved metrics to {metrics_file}")
 
+    # Save model checkpoint (only on rank 0)
+    if rank == 0:
+        checkpoint_dir = output_dir / "checkpoints"
+        checkpoint_dir.mkdir(exist_ok=True)
+
+        # Save final model checkpoint
+        final_checkpoint = checkpoint_dir / "final_model.pth"
+        trainer.save_checkpoint(str(final_checkpoint))
+
+        # Also save just the model weights for easier loading
+        model_weights = checkpoint_dir / "model_weights.pth"
+        torch.save(trainer.model.module.state_dict(), str(model_weights))
+        logger.info(f"Saved model weights to {model_weights}")
+
     # Cleanup
     trainer.cleanup()
 

@@ -24,10 +24,12 @@ h5py>=3.8.0
 plotly>=5.14.0
 matplotlib>=3.7.0
 seaborn>=0.12.0
-streamlit>=1.24.0
 
 # Database & Caching
 redis>=4.5.0
+
+# Monitoring & Metrics Export
+prometheus-client>=0.18.0
 
 # Utilities
 pyyaml>=6.0
