@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: hetero-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - hetero-network
+    restart: always
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: hetero-grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./provisioning:/etc/grafana/provisioning
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    networks:
+      - hetero-network
+    depends_on:
+      - redis
+    restart: always
+
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: hetero-redis-exporter
+    ports:
+      - "9121:9121"
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+    networks:
+      - hetero-network
+    depends_on:
+      - redis
+    restart: always
+
+networks:
+  hetero-network:
+    driver: bridge
+
+volumes:
+  redis_data:
+  grafana_data:
