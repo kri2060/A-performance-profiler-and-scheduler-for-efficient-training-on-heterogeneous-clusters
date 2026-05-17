@@ -313,6 +313,7 @@ def train_worker(rank, args):
                         'epoch': epoch,
                         'iteration': batch_idx,
                         'loss': metrics.loss,
+                        'batch_size': data.size(0),
                         'throughput': metrics.throughput,
                         'iteration_time': metrics.iteration_time,
                         'data_loading_time': metrics.data_loading_time,
@@ -426,6 +427,14 @@ def train_worker(rank, args):
                     # In a real system, the Orchestrator would restart us.
                     # Current "Student-Safe" elasticity = Save & Crash gracefully.
                     raise RuntimeError(f"Cluster Unhealthy: Nodes {dead_nodes} died. Checkpoint saved.")
+    
+# --- ADD PERIODIC CHECKPOINTING HERE ---
+    if rank == 0:
+        ckpt_dir = output_dir / "checkpoints"
+        ckpt_dir.mkdir(exist_ok=True)
+        periodic_ckpt = ckpt_dir / f"epoch_{epoch}_model.pth"
+        trainer.save_checkpoint(str(periodic_ckpt))
+        logger.info(f"Saved periodic checkpoint: epoch_{epoch}_model.pth")
 
     # Save metrics
     if profiler and rank == 0:

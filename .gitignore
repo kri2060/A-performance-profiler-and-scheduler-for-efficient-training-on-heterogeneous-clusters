@@ -218,3 +218,9 @@ data/
 *.pth
 *.ckpt
 node_modules/
+
+# Next.js build output
+.next/
+
+# OS
+.DS_Store

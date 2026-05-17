@@ -443,6 +443,65 @@ class AdaptiveLoadBalancer:
         print(f"Load Imbalance: {self.get_load_imbalance():.2%}")
         print("="*80 + "\n")
 
+    # ------------------------------------------------------------------
+    # DBS: Dynamic Batch Size partition computation (from get_size())
+    # ------------------------------------------------------------------
+
+    def compute_partitions(
+        self,
+        nodes_time: list,
+        partition_size: list,
+        batch_size: int,
+    ) -> np.ndarray:
+        """Compute per-worker data partition ratios using the DBS algorithm.
+
+        Implements the DBS ``get_size()`` formula::
+
+            cons_k = 1 / sum(partition[i] / time[i])
+            distribution_ratio = partition * cons_k / time
+
+        The result is integer-rounded so that the allocated mini-batch
+        counts sum to exactly ``batch_size``, with remainders distributed
+        to workers whose fractional parts are largest.
+
+        Args:
+            nodes_time:     Per-worker pure training time from the last epoch
+                            (list/array, length == world_size).
+            partition_size: Per-worker partition ratios from the last epoch
+                            (list/array, sum ≈ 1.0).
+            batch_size:     Global batch size to partition.
+
+        Returns:
+            Normalised partition ratio array (sums to 1.0).
+        """
+        nodes_time = np.array(nodes_time, dtype=float)
+        partition_size = np.array(partition_size, dtype=float)
+
+        # Guard: avoid division by zero for any stalled worker
+        nodes_time = np.where(nodes_time <= 0, 1e-6, nodes_time)
+
+        _sum = float(np.sum(partition_size / nodes_time))
+        cons_k = 1.0 / _sum
+
+        distribution_ratio = (partition_size * cons_k) / nodes_time
+
+        # Integer batch allocation with floor + ceiling remainder fix
+        norm_batch = distribution_ratio * batch_size / distribution_ratio.sum()
+        floor_norm_batch = np.floor(norm_batch)
+        floor_sum = int(floor_norm_batch.sum())
+        ceil_counter = batch_size - floor_sum  # number of workers to round up
+
+        # Top-k fractional parts get ceiling; bias toward workers ≥ 0.5
+        idx_ceil = (norm_batch - floor_norm_batch).argsort()[-ceil_counter:]
+        idx_round = np.argwhere(norm_batch - floor_norm_batch >= 0.5).reshape(-1)
+        _, idx_inter, _ = np.intersect1d(idx_ceil, idx_round, return_indices=True)
+        idx = idx_ceil[idx_inter]
+        floor_norm_batch[idx] += 1
+
+        norm = floor_norm_batch / floor_norm_batch.sum()
+        logger.info(f"DBS compute_partitions: {norm}")
+        return norm
+
     def save_state(self, filepath: str):
         """Save load balancer state"""
         state = {

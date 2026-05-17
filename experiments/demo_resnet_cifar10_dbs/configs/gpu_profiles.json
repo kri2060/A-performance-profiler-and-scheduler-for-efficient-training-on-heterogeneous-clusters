@@ -1,0 +1,34 @@
+[
+  {
+    "device_id": 0,
+    "compute_score": 3.0,
+    "total_memory_mb": 24000,
+    "memory_bandwidth_gbps": 1008,
+    "network_mbps": 2500,
+    "hostname": "node-0-rtx4090"
+  },
+  {
+    "device_id": 1,
+    "compute_score": 1.5,
+    "total_memory_mb": 10000,
+    "memory_bandwidth_gbps": 760,
+    "network_mbps": 1000,
+    "hostname": "node-1-rtx3080"
+  },
+  {
+    "device_id": 2,
+    "compute_score": 0.6,
+    "total_memory_mb": 12000,
+    "memory_bandwidth_gbps": 360,
+    "network_mbps": 1000,
+    "hostname": "node-2-rtx3060"
+  },
+  {
+    "device_id": 3,
+    "compute_score": 0.4,
+    "total_memory_mb": 11000,
+    "memory_bandwidth_gbps": 484,
+    "network_mbps": 1000,
+    "hostname": "node-3-gtx1080ti"
+  }
+]

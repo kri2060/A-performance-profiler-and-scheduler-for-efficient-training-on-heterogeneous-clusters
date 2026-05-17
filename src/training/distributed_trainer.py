@@ -13,6 +13,7 @@ from typing import Optional, Dict, Any, Callable
 import logging
 import time
 import json
+import numpy as np
 from src.communication.compression import GradientCompressor, FP16Compressor
 
 logging.basicConfig(level=logging.INFO)
@@ -490,3 +491,98 @@ def setup_distributed_training(
         )
 
     return rank
+
+
+# ---------------------------------------------------------------------------
+# DBS: Synchronous SGD with weighted gradient averaging (from SSGD())
+# ---------------------------------------------------------------------------
+
+def ssgd(
+    model: "torch.nn.Module",
+    rank: int,
+    world_size: int,
+    partition_size: "np.ndarray",
+) -> float:
+    """Weighted gradient all-reduce implementing the DBS SSGD algorithm.
+
+    Each worker scales its gradients by its data partition ratio before
+    all_reduce, so the global update is correctly weighted even when
+    workers process different numbers of samples.
+
+    Args:
+        model:          The model whose ``.grad`` buffers to synchronise.
+        rank:           This worker's rank.
+        world_size:     Total number of workers.
+        partition_size: Per-worker partition ratios (numpy array, sums to 1).
+
+    Returns:
+        Total synchronisation wall-time in seconds.
+    """
+    import time as _time
+
+    wait_time = 0.0
+    partition_size = np.asarray(partition_size, dtype=float)
+    total = partition_size.sum()
+    weight = float(partition_size[rank] / total) if total > 0 else 1.0 / world_size
+
+    for param in model.parameters():
+        if param.grad is None:
+            continue
+        scaled_grad = weight * param.grad.data
+        req = dist.all_reduce(scaled_grad, op=dist.ReduceOp.SUM, async_op=True)
+        t0 = _time.time()
+        req.wait()
+        wait_time += _time.time() - t0
+        param.grad.data = scaled_grad
+
+    return wait_time
+
+
+# ---------------------------------------------------------------------------
+# DBS: Worker process spawning (from init_processes())
+# ---------------------------------------------------------------------------
+
+def spawn_workers(
+    world_size: int,
+    fn,
+    backend: str = "gloo",
+    master_addr: str = "127.0.0.1",
+    master_port: str = "29500",
+) -> None:
+    """Spawn *world_size* worker processes running *fn(rank, world_size)*.
+
+    Each spawned process calls ``dist.init_process_group`` before *fn*.
+    Mirrors the DBS ``init_processes`` / ``__main__`` spawning pattern
+    without globals.
+
+    Args:
+        world_size:   Number of parallel workers to spawn.
+        fn:           Callable with signature ``fn(rank, world_size)``.
+        backend:      Distributed backend (``'gloo'`` or ``'nccl'``).
+        master_addr:  Rendezvous IP.
+        master_port:  Rendezvous port (string).
+    """
+    from torch.multiprocessing import Process, set_start_method
+
+    try:
+        set_start_method("spawn", force=True)
+    except RuntimeError:
+        pass  # already set
+
+    def _init_and_run(rank, size, _fn, _backend, _addr, _port):
+        os.environ["MASTER_ADDR"] = _addr
+        os.environ["MASTER_PORT"] = _port
+        dist.init_process_group(_backend, rank=rank, world_size=size)
+        _fn(rank, size)
+
+    processes = []
+    for rank in range(world_size):
+        p = Process(
+            target=_init_and_run,
+            args=(rank, world_size, fn, backend, master_addr, master_port),
+        )
+        p.start()
+        processes.append(p)
+
+    for p in processes:
+        p.join()

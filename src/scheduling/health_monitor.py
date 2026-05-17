@@ -117,3 +117,82 @@ class NodeHealthManager:
                 pass
                 
         return dead_nodes
+
+
+# ---------------------------------------------------------------------------
+# DBS: Straggler simulation (from fault_tolerance_wait())
+# ---------------------------------------------------------------------------
+
+def simulate_straggler(
+    rank: int,
+    epoch: int,
+    batch_num: int,
+    state: dict,
+    fault_chance: float = 0.1,
+) -> float:
+    """Simulate a slow/faulty worker to test adaptive balancing behaviour.
+
+    Ported from DBS ``fault_tolerance_wait()`` with all globals removed.
+    The caller owns *state* and passes it on every call so the function
+    stays stateless and fully testable.
+
+    Args:
+        rank:         Worker rank (used for logging only).
+        epoch:        Current epoch number.
+        batch_num:    Total batches in this epoch (to split wait evenly).
+        state:        Mutable dict carrying fault state across calls::
+
+                          {
+                            "fault_wait":      bool,   # currently waiting?
+                            "fault_round":     int,    # stop-waiting epoch
+                            "fault_wait_time": float,  # seconds to add per epoch
+                            "saved_epoch":     int,    # last epoch seen
+                          }
+
+        fault_chance: Probability [0, 1] that a worker begins a slow phase.
+
+    Returns:
+        Seconds slept in this call (0.0 if no fault active).
+    """
+    import random
+    import time as _time
+
+    # --- still in a waiting phase ---
+    if state.get("fault_wait", False):
+        if epoch <= state["fault_round"]:
+            sleep_s = float(state["fault_wait_time"]) / max(1, batch_num)
+            _time.sleep(sleep_s)
+            return sleep_s
+        else:
+            state["fault_wait"] = False
+            return 0.0
+
+    if fault_chance <= 0.0:
+        return 0.0
+
+    # --- only enter the lottery once per epoch ---
+    if state.get("saved_epoch") == epoch:
+        return 0.0
+    state["saved_epoch"] = epoch
+
+    luck = random.random()
+    logger.debug(f"simulate_straggler rank={rank} luck={luck:.4f} limit={fault_chance}")
+
+    if luck < fault_chance:
+        wait_time = random.uniform(5, 10)
+        wait_until = epoch + random.randint(4, 20)
+        state.update(
+            fault_wait=True,
+            fault_round=wait_until,
+            fault_wait_time=wait_time,
+        )
+        logger.info(
+            f"Rank {rank}: straggler active — +{wait_time:.1f}s/epoch "
+            f"until epoch {wait_until}"
+        )
+        # Apply first instalment immediately
+        sleep_s = wait_time / max(1, batch_num)
+        _time.sleep(sleep_s)
+        return sleep_s
+
+    return 0.0

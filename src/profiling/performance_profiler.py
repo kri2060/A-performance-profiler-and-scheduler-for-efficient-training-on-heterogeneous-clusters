@@ -305,6 +305,55 @@ class PerformanceProfiler:
 
         return avg_metrics
 
+    # ------------------------------------------------------------------
+    # DBS: Expose timing breakdown for dashboard consumption
+    # ------------------------------------------------------------------
+
+    def get_timing_summary(self) -> Dict:
+        """Return DBS-compatible timing summary for the most recent window.
+
+        Provides the three timing keys used by the DBS train loop:
+
+        * ``train_time``   — pure compute time (forward + backward + optimizer)
+        * ``sync_time``    — communication / gradient sync time
+        * ``average_time`` — mean per-iteration time across the window
+
+        These map directly to the values returned by the DBS ``train()``
+        function and are suitable for feeding into ``compute_partitions()``.
+
+        Returns:
+            Dict with keys ``train_time``, ``sync_time``, ``average_time``,
+            ``throughput``, and ``bottleneck``.
+        """
+        recent = self.get_recent_metrics()
+        if not recent:
+            return {
+                "train_time": 0.0,
+                "sync_time": 0.0,
+                "average_time": 0.0,
+                "throughput": 0.0,
+                "bottleneck": "No data",
+            }
+
+        compute_times = [
+            m.forward_time + m.backward_time + m.optimizer_time
+            for m in recent
+        ]
+        # sync_time is the remainder of iteration_time not spent on compute
+        sync_times = [
+            max(0.0, m.iteration_time - (m.forward_time + m.backward_time + m.optimizer_time))
+            for m in recent
+        ]
+        iteration_times = [m.iteration_time for m in recent]
+
+        return {
+            "train_time": sum(compute_times),
+            "sync_time": sum(sync_times),
+            "average_time": sum(iteration_times) / len(iteration_times),
+            "throughput": sum(m.throughput for m in recent) / len(recent),
+            "bottleneck": self.identify_bottleneck(),
+        }
+
     def identify_bottleneck(self) -> str:
         """Identify performance bottleneck"""
         avg = self.get_average_metrics(n=20)

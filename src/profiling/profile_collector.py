@@ -3,7 +3,6 @@
 Distributed GPU Profile Collector
 Master collects profiles from all workers before training
 """
-
 import socket
 import json
 import time
